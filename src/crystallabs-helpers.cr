@@ -1,10 +1,6 @@
 module Crystallabs::Helpers
   VERSION = "0.1.0"
 
-  module Object_Inspect
-    def i; inspect end
-  end
-
   module Logging
     macro included
       Log = ::Log.for self.name
@@ -36,6 +32,10 @@ module Crystallabs::Helpers
 
     def to_b(arg : Bool)
       arg
+    end
+
+    def to_i(arg : Bool)
+      arg ? 1 : 0
     end
   end
 
@@ -74,10 +74,10 @@ module Crystallabs::Helpers
     end
 
     # Defines new_method as an alias of last (most recently defined) method.
+    # TODO add check to catch multiple aliases to the same name
     macro alias_previous(*new_methods)
       {% for new_method in new_methods %}
-        alias_method new_method, {{@type.methods.last.name}}
-        #p "{{new_method}} -> {{@type.methods.last.name}}"
+        alias_method {{new_method}}, {{@type.methods.last.name}}
       {% end %}
     end
   end
