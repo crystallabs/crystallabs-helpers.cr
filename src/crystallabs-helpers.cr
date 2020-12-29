@@ -3,7 +3,18 @@ module Crystallabs::Helpers
 
   module Logging
     macro included
-      Log = ::Log.for self.name
+      Log = ::Log.for self.name.gsub("::", '.').underscore
+    end
+
+    # Returns as a string the current method name and all arguments inspected.
+    macro my(*args, line=__LINE__)
+      String.build(128) {|__s|
+        __s << {{@def.name.stringify}}
+        __s << ':' #<< {{line}} << ':'
+        {% for a in args %}
+          __s << ' ' << {{a}}.inspect
+        {% end %}
+      }
     end
   end
 
@@ -67,12 +78,12 @@ module Crystallabs::Helpers
     # ```
     #
     # This macro was present in Crystal until commit 7c3239ee505e07544ec372839efed527801d210a.
-    macro alias_method(new_method, old_method, *args)
+    macro alias_method(new_method, old_method) #, *args)
       {% if @type.methods.includes? new_method %}
         {% raise "Alias name '#{new_method}' already exists as a method!" %}
       {% end %}
-      def {{new_method.id}}({{*args}})
-        {{old_method.id}}({{*args}})
+      def {{new_method.id}}(*args)
+        {{old_method.id}}(*args)
       end
     end
 
@@ -81,7 +92,7 @@ module Crystallabs::Helpers
     macro alias_previous(*new_methods)
       {% for new_method in new_methods %}
         {% m = @type.methods.last %}
-        alias_method {{new_method}}, {{m.name}}{% if m.args.size > 0 %}, {{*m.args}}{% end %}
+        alias_method {{new_method}}, {{m.name}}
       {% end %}
     end
   end
