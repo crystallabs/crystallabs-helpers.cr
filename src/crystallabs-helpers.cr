@@ -67,9 +67,12 @@ module Crystallabs::Helpers
     # ```
     #
     # This macro was present in Crystal until commit 7c3239ee505e07544ec372839efed527801d210a.
-    macro alias_method(new_method, old_method)
-      def {{new_method.id}}(*args)
-        {{old_method.id}}(*args)
+    macro alias_method(new_method, old_method, *args)
+      {% if @type.methods.includes? new_method %}
+        {% raise "Alias name '#{new_method}' already exists as a method!" %}
+      {% end %}
+      def {{new_method.id}}({{*args}})
+        {{old_method.id}}({{*args}})
       end
     end
 
@@ -77,7 +80,8 @@ module Crystallabs::Helpers
     # TODO add check to catch multiple aliases to the same name
     macro alias_previous(*new_methods)
       {% for new_method in new_methods %}
-        alias_method {{new_method}}, {{@type.methods.last.name}}
+        {% m = @type.methods.last %}
+        alias_method {{new_method}}, {{m.name}}{% if m.args.size > 0 %}, {{*m.args}}{% end %}
       {% end %}
     end
   end
