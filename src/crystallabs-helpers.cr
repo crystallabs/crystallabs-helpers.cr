@@ -12,7 +12,8 @@ module Crystallabs::Helpers
         __s << {{@def.name.stringify}}
         __s << ':' #<< {{line}} << ':'
         {% for a in args %}
-          __s << ' ' << {{a}}.inspect
+          __s << ' ' << {{a.stringify}} << '='
+          {{a}}.inspect __s
         {% end %}
       }
     end
@@ -78,21 +79,21 @@ module Crystallabs::Helpers
     # ```
     #
     # This macro was present in Crystal until commit 7c3239ee505e07544ec372839efed527801d210a.
-    macro alias_method(new_method, old_method) #, *args)
+    macro alias_method(new_method, old_method)
       {% if @type.methods.includes? new_method %}
         {% raise "Alias name '#{new_method}' already exists as a method!" %}
       {% end %}
-      def {{new_method.id}}(*args)
-        {{old_method.id}}(*args)
+      # :ditto:
+      def {{new_method.id}}{% if old_method.id.ends_with? "=" %}(arg){% else %}(*args){% end %}
+        self.{{old_method.id}}{% if old_method.id.ends_with? "=" %}(arg){% else %}(*args){% end %}
       end
     end
 
     # Defines new_method as an alias of last (most recently defined) method.
-    # TODO add check to catch multiple aliases to the same name
     macro alias_previous(*new_methods)
+      {% m = @type.methods.last %}
       {% for new_method in new_methods %}
-        {% m = @type.methods.last %}
-        alias_method {{new_method}}, {{m.name}}
+        alias_method {{new_method.id.symbolize}}, {{m.name.id.symbolize}}
       {% end %}
     end
   end
