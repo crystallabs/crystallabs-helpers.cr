@@ -83,7 +83,7 @@ module Crystallabs::Helpers
       {% if @type.methods.includes? new_method %}
         {% raise "Alias name '#{new_method}' already exists as a method!" %}
       {% end %}
-      # :ditto:
+      # :nodoc:
       def {{new_method.id}}{% if old_method.id.ends_with? "=" %}(arg){% else %}(*args){% end %}
         self.{{old_method.id}}{% if old_method.id.ends_with? "=" %}(arg){% else %}(*args){% end %}
       end
