@@ -7,7 +7,7 @@ module Crystallabs::Helpers
     end
 
     # Returns as a string the current method name and all arguments inspected.
-    macro my(*args, line=__LINE__)
+    macro my(*args, line = __LINE__)
       String.build(128) {|__s|
         __s << {{@def.name.stringify}}
         __s << ':' #<< {{line}} << ':'
@@ -20,7 +20,6 @@ module Crystallabs::Helpers
   end
 
   module Boolean
-
     # :nodoc:
     def to_b(arg : String, empty = false)
       return empty if !empty.nil? && (arg.nil? || arg.empty?)
@@ -74,8 +73,8 @@ module Crystallabs::Helpers
     # end
     #
     # person = Person.new "John"
-    # person.name #=> "John"
-    # person.full_name #=> "John"
+    # person.name      # => "John"
+    # person.full_name # => "John"
     # ```
     #
     # This macro was present in Crystal until commit 7c3239ee505e07544ec372839efed527801d210a.
@@ -97,5 +96,4 @@ module Crystallabs::Helpers
       {% end %}
     end
   end
-
 end
