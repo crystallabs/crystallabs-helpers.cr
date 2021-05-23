@@ -14,7 +14,7 @@ functions in the resulting binary.
    dependencies:
      crystallabs-helpers:
        github: crystallabs/crystallabs-helpers.cr
-       version: 0.1.0
+       version: ~> 1.0
    ```
 
 2. Run `shards install`
