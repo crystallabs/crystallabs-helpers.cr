@@ -1,5 +1,5 @@
 module Crystallabs::Helpers
-  VERSION = "1.0.0"
+  VERSION = "1.0.1"
 
   module Logging
     macro included
