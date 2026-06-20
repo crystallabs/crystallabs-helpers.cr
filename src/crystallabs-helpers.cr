@@ -54,6 +54,81 @@ module Crystallabs::Helpers
     # TODO try_read(Str | Arr), return first found, else ''
   end
 
+  # Helpers for working with enums via plain shorthands, so callers can write
+  # `:vcenter` / `"vcenter"` (or `{:vcenter, :right}`) instead of
+  # `Tput::AlignFlag::VCenter` (or `Tput::AlignFlag::VCenter | Tput::AlignFlag::Right`).
+  #
+  # A "shorthand" is a `Symbol` or a `String` — both go through `Enum.parse`, so
+  # the two are interchangeable everywhere below.
+  #
+  # Nothing in the standard library is reopened; conversion is done through the
+  # generic `from` class methods below, which work for any enum `T`.
+  module Enums
+    # An enum member referred to in shorthand, by `Symbol` or `String`.
+    alias Shorthand = Symbol | String
+
+    # The "shorthand side" of an enum-valued argument: a single shorthand, or a
+    # collection of shorthands (for `@[Flags]` enums). One shared alias for every
+    # enum — no per-enum aliases needed. By convention the intended enum is listed
+    # *first* in the union, e.g. `Tput::AlignFlag | Enums::Shorthands`.
+    alias Shorthands = Shorthand | Enumerable(Shorthand)
+
+    # Passthrough: a value that is already of the target enum is returned as-is.
+    # Lets call sites accept both `:center` and `AlignFlag::Center` uniformly.
+    def self.from(t : T.class, value : T) forall T
+      value
+    end
+
+    # Converts a single shorthand (symbol or string) into an enum member, e.g.
+    # `Enums.from(AlignFlag, :center)` or `Enums.from(AlignFlag, "center")`,
+    # both `# => AlignFlag::Center`. Matching is case-insensitive (`Enum.parse`).
+    def self.from(t : T.class, value : Shorthand) forall T
+      T.parse value.to_s
+    end
+
+    # Converts a collection of shorthands into a combined enum value by OR-ing the
+    # members together — intended for `@[Flags]` enums, e.g.
+    # `Enums.from(AlignFlag, {:vcenter, :right}) # => VCenter | Right`.
+    # Symbols and strings may be mixed. An empty collection yields the zero
+    # value (e.g. `AlignFlag::None`).
+    def self.from(t : T.class, values : Enumerable(Shorthand)) forall T
+      values.reduce(T.new(0)) { |acc, v| acc | T.parse(v.to_s) }
+    end
+
+    # Declares an enum-typed `property` exactly like the built-in macro, and in
+    # addition defines a setter overload that accepts a shorthand or collection
+    # of shorthands (`Symbol`/`String`). After this, both the assignment form and
+    # any initializer that routes its argument through `self.NAME = ...` accept
+    # shorthands transparently.
+    #
+    # The conversion target is derived from the property's own type via
+    # `typeof`, so the enum is never named twice and the setter stays generic:
+    #
+    # ```
+    # class Widget
+    #   Crystallabs::Helpers::Enums.enum_property align : Tput::AlignFlag = Tput::AlignFlag::Top | Tput::AlignFlag::Left
+    #
+    #   # In a hand-written initializer, widen the argument and route it through
+    #   # the setter; the enum is listed first, followed by the shared `Shorthands`:
+    #   def initialize(align : Tput::AlignFlag | Crystallabs::Helpers::Enums::Shorthands = @align)
+    #     self.align = align
+    #   end
+    # end
+    #
+    # w.align = :center            # => Center
+    # w.align = "center"           # => Center
+    # w.align = {:vcenter, :right} # => VCenter | Right
+    # w.align = Tput::AlignFlag::Left
+    # ```
+    macro enum_property(decl)
+      property {{decl.var.id}} : {{decl.type}}{% if decl.value %} = {{decl.value}}{% end %}
+
+      def {{decl.var.id}}=(value : ::Crystallabs::Helpers::Enums::Shorthands)
+        @{{decl.var.id}} = ::Crystallabs::Helpers::Enums.from(typeof(@{{decl.var.id}}), value)
+      end
+    end
+  end
+
   module Alias_Methods
     # Defines new_method as an alias of old_method.
     #
