@@ -1,9 +1,13 @@
 name: crystallabs-helpers
 version: 1.0.1
+description: |
+  Collection of useful helper modules (Logging, Boolean, Enums, Alias_Methods).
 
 authors:
   - Davor Ocelic <docelic@crystallabs.io>
 
-crystal: 1.0.0
+repository: https://github.com/crystallabs/crystallabs-helpers.cr
+
+crystal: ">= 1.0.0"
 
 license: AGPLv3

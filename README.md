@@ -69,6 +69,37 @@ Usage:
   to_i true
 ```
 
+### Crystallabs::Helpers::Enums
+
+Lets callers refer to enum members by `Symbol` or `String` shorthand
+(e.g. `:center` / `"center"`, or `{:vcenter, :right}` for `@[Flags]`
+enums) instead of spelling out the fully-qualified enum constant.
+
+```cr
+    # Generic conversion, works for any enum T:
+    Crystallabs::Helpers::Enums.from(T.class, value)
+
+    # Declares an enum property whose setter also accepts shorthands:
+    macro enum_property(decl)
+```
+
+Usage:
+
+```cr
+  Crystallabs::Helpers::Enums.from AlignFlag, :center            # => Center
+  Crystallabs::Helpers::Enums.from AlignFlag, "center"           # => Center
+  Crystallabs::Helpers::Enums.from AlignFlag, {:vcenter, :right} # => VCenter | Right
+
+  class Widget
+    Crystallabs::Helpers::Enums.enum_property align : AlignFlag = AlignFlag::Top
+  end
+
+  w = Widget.new
+  w.align = :center            # => Center
+  w.align = {:vcenter, :right} # => VCenter | Right
+  w.align = AlignFlag::Left    # real enum values still work
+```
+
 ### Crystallabs::Helpers::Alias_Methods
 
 Allows aliasing methods. Use only when needed since in general Crystal

@@ -22,8 +22,8 @@ module Crystallabs::Helpers
   module Boolean
     # :nodoc:
     def to_b(arg : String, empty = false)
-      return empty if !empty.nil? && (arg.nil? || arg.empty?)
-      return false if {"false", "", "0", "-0", "0n", " "}.includes? arg
+      return empty if arg.empty?
+      return false if {"false", "0", "-0", "0n", " "}.includes? arg
       true
     end
 
