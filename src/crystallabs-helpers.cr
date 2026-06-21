@@ -50,10 +50,6 @@ module Crystallabs::Helpers
     end
   end
 
-  module File
-    # TODO try_read(Str | Arr), return first found, else ''
-  end
-
   # Helpers for working with enums via plain shorthands, so callers can write
   # `:vcenter` / `"vcenter"` (or `{:vcenter, :right}`) instead of
   # `Tput::AlignFlag::VCenter` (or `Tput::AlignFlag::VCenter | Tput::AlignFlag::Right`).
@@ -154,8 +150,8 @@ module Crystallabs::Helpers
     #
     # This macro was present in Crystal until commit 7c3239ee505e07544ec372839efed527801d210a.
     macro alias_method(new_method, old_method)
-      {% if @type.methods.includes? new_method %}
-        {% raise "Alias name '#{new_method}' already exists as a method!" %}
+      {% if @type.methods.any? { |m| m.name.id == new_method.id } %}
+        {% raise "Alias name '#{new_method.id}' already exists as a method!" %}
       {% end %}
       # :nodoc:
       def {{new_method.id}}{% if old_method.id.ends_with? "=" %}(arg){% else %}(*args){% end %}
