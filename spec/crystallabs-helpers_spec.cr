@@ -20,6 +20,14 @@ private class WidgetWithEnum
   end
 end
 
+private class Loggy
+  include Crystallabs::Helpers::Logging
+
+  def describe_it(a, b)
+    my a, b
+  end
+end
+
 private class Person
   include Crystallabs::Helpers::Alias_Methods
 
@@ -38,6 +46,12 @@ private class Person
 end
 
 describe Crystallabs::Helpers do
+  describe Crystallabs::Helpers::Logging do
+    it "renders the method name and inspected arguments" do
+      Loggy.new.describe_it(1, "x").should eq %(describe_it: a=1 b="x")
+    end
+  end
+
   describe Crystallabs::Helpers::Boolean do
     b = BooleanHolder.new
 
