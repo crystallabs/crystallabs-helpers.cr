@@ -28,6 +28,7 @@ module Crystallabs::Helpers
     end
 
     # :nodoc:
+    @[AlwaysInline]
     def to_b(arg : Int, empty = false)
       arg != 0
     end
@@ -37,14 +38,17 @@ module Crystallabs::Helpers
       to_b arg.to_s
     end
 
+    @[AlwaysInline]
     def to_b(arg : Nil, empty = false)
       false
     end
 
+    @[AlwaysInline]
     def to_b(arg : Bool)
       arg
     end
 
+    @[AlwaysInline]
     def to_i(arg : Bool)
       arg ? 1 : 0
     end
@@ -71,6 +75,7 @@ module Crystallabs::Helpers
 
     # Passthrough: a value that is already of the target enum is returned as-is.
     # Lets call sites accept both `:center` and `AlignFlag::Center` uniformly.
+    @[AlwaysInline]
     def self.from(t : T.class, value : T) forall T
       value
     end
