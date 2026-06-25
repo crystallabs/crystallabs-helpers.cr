@@ -13,6 +13,7 @@ private class BooleanHolder
 end
 
 private class WidgetWithEnum
+  # ameba:disable Lint/UselessAssign -- macro arg `name : Enum = Default` mis-read as a useless local assignment
   Crystallabs::Helpers::Enums.enum_property color : SpecColor = SpecColor::Red
 
   def initialize(color : SpecColor | Crystallabs::Helpers::Enums::Shorthands = @color)

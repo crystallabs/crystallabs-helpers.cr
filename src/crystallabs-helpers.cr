@@ -130,6 +130,7 @@ module Crystallabs::Helpers
     end
   end
 
+  # ameba:disable Naming/TypeNames -- deliberate public API name (released, snake_case mirrors `alias_method`)
   module Alias_Methods
     # Defines new_method as an alias of old_method.
     #
@@ -155,7 +156,7 @@ module Crystallabs::Helpers
     #
     # This macro was present in Crystal until commit 7c3239ee505e07544ec372839efed527801d210a.
     macro alias_method(new_method, old_method)
-      {% if @type.methods.any? { |m| m.name.id == new_method.id } %}
+      {% if @type.methods.any? { |meth| meth.name.id == new_method.id } %}
         {% raise "Alias name '#{new_method.id}' already exists as a method!" %}
       {% end %}
       # :nodoc:
