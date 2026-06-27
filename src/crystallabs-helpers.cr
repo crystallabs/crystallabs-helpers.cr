@@ -22,8 +22,8 @@ module Crystallabs::Helpers
   module Boolean
     # :nodoc:
     def to_b(arg : String, empty = false)
-      return empty if arg.empty?
-      return false if {"false", "0", "-0", "0n", " "}.includes? arg
+      return empty if arg.blank?
+      return false if {"false", "0", "-0", "0n"}.includes? arg
       true
     end
 
@@ -35,16 +35,16 @@ module Crystallabs::Helpers
 
     # :nodoc:
     def to_b(arg : Char, empty = false)
-      to_b arg.to_s
+      to_b arg.to_s, empty
     end
 
     @[AlwaysInline]
     def to_b(arg : Nil, empty = false)
-      false
+      empty
     end
 
     @[AlwaysInline]
-    def to_b(arg : Bool)
+    def to_b(arg : Bool, empty = false)
       arg
     end
 

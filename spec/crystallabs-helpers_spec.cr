@@ -73,6 +73,12 @@ describe Crystallabs::Helpers do
       b.to_b("", empty: false).should be_false
     end
 
+    it "treats whitespace-only strings as blank, honoring the empty fallback" do
+      b.to_b("   ").should be_false
+      b.to_b("\t").should be_false
+      b.to_b(" ", empty: true).should be_true
+    end
+
     it "converts integers" do
       b.to_b(0).should be_false
       b.to_b(1).should be_true
@@ -84,10 +90,25 @@ describe Crystallabs::Helpers do
       b.to_b('1').should be_true
     end
 
+    it "forwards the empty fallback for blank (whitespace) chars" do
+      b.to_b(' ', empty: true).should be_true
+      b.to_b(' ', empty: false).should be_false
+    end
+
     it "converts nil and bools" do
       b.to_b(nil).should be_false
       b.to_b(true).should be_true
       b.to_b(false).should be_false
+    end
+
+    it "accepts the empty keyword uniformly across overloads (incl. Bool)" do
+      b.to_b(true, empty: true).should be_true
+      b.to_b(false, empty: true).should be_false
+    end
+
+    it "honors the empty fallback for nil (the canonical blank value)" do
+      b.to_b(nil, empty: true).should be_true
+      b.to_b(nil, empty: false).should be_false
     end
 
     it "converts bools to ints" do
