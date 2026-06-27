@@ -77,6 +77,16 @@ describe Crystallabs::Helpers do
       b.to_b("True").should be_true
     end
 
+    it "recognizes falsy tokens despite surrounding whitespace" do
+      # Common when values come from env vars, files or CLI args with a trailing newline.
+      b.to_b("0\n").should be_false
+      b.to_b(" 0 ").should be_false
+      b.to_b("false\n").should be_false
+      b.to_b("  FALSE  ").should be_false
+      # A truthy token wrapped in whitespace stays truthy.
+      b.to_b(" true \n").should be_true
+    end
+
     it "honors the empty fallback for blank strings" do
       b.to_b("", empty: true).should be_true
       b.to_b("", empty: false).should be_false
