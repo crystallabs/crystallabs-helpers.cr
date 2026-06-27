@@ -23,7 +23,7 @@ module Crystallabs::Helpers
     # :nodoc:
     def to_b(arg : String, empty = false)
       return empty if arg.blank?
-      return false if {"false", "0", "-0", "0n"}.includes? arg
+      return false if {"false", "0", "-0", "0n"}.includes? arg.downcase
       true
     end
 
