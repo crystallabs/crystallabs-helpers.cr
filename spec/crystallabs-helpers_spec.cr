@@ -171,6 +171,12 @@ describe Crystallabs::Helpers do
       Crystallabs::Helpers::Enums.from(SpecColor, [] of Crystallabs::Helpers::Enums::Shorthand).should eq SpecColor::None
     end
 
+    it "converts a single-element collection via the same path as a lone shorthand" do
+      # The collection overload delegates per-element to the single-shorthand
+      # overload, so a one-element collection must equal the scalar conversion.
+      Crystallabs::Helpers::Enums.from(SpecColor, {:green}).should eq Crystallabs::Helpers::Enums.from(SpecColor, :green)
+    end
+
     describe "enum_property" do
       it "defaults to the declared value" do
         WidgetWithEnum.new.color.should eq SpecColor::Red

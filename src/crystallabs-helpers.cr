@@ -93,7 +93,10 @@ module Crystallabs::Helpers
     # Symbols and strings may be mixed. An empty collection yields the zero
     # value (e.g. `AlignFlag::None`).
     def self.from(t : T.class, values : Enumerable(Shorthand)) forall T
-      values.reduce(T.new(0)) { |acc, v| acc | T.parse(v.to_s) }
+      # Delegate each element to the single-shorthand overload above so the
+      # shorthand-to-member conversion lives in exactly one place and the two
+      # paths can't drift apart.
+      values.reduce(T.new(0)) { |acc, v| acc | from(T, v) }
     end
 
     # Declares an enum-typed `property` exactly like the built-in macro, and in
