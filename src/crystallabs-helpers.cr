@@ -20,10 +20,48 @@ module Crystallabs::Helpers
   end
 
   module Boolean
+    # The lowercase tokens that, ignoring surrounding whitespace and case, are
+    # treated as `false`. Everything else non-blank is `true`.
+    FALSY_TOKENS = {"false", "0", "-0", "0n"}
+
     # :nodoc:
     def to_b(arg : String, empty = false)
       return empty if arg.blank?
-      return false if {"false", "0", "-0", "0n"}.includes? arg.strip.downcase
+      # Fast path for pure-ASCII strings (the overwhelmingly common case): strip
+      # and case-fold in place over the byte buffer instead of allocating the two
+      # intermediate strings `arg.strip.downcase` would. For an all-ASCII string
+      # this is exactly equivalent -- `String#strip`/`#downcase` operate purely on
+      # ASCII whitespace/letters here -- so behavior is preserved, while the
+      # non-ASCII tail falls back to the original, fully Unicode-correct path.
+      if arg.ascii_only?
+        bytes = arg.to_slice
+        lo = 0
+        hi = bytes.size
+        while lo < hi && bytes[lo].unsafe_chr.ascii_whitespace?
+          lo += 1
+        end
+        while hi > lo && bytes[hi - 1].unsafe_chr.ascii_whitespace?
+          hi -= 1
+        end
+        len = hi - lo
+        return true if len == 0
+        FALSY_TOKENS.each do |tok|
+          next unless tok.bytesize == len
+          token = tok.to_slice
+          matched = true
+          len.times do |i|
+            byte = bytes[lo + i]
+            byte |= 0x20_u8 if 0x41_u8 <= byte <= 0x5A_u8 # ASCII upper -> lower
+            if byte != token[i]
+              matched = false
+              break
+            end
+          end
+          return false if matched
+        end
+        return true
+      end
+      return false if FALSY_TOKENS.includes? arg.strip.downcase
       true
     end
 
