@@ -73,6 +73,16 @@ module Crystallabs::Helpers
 
     # :nodoc:
     def to_b(arg : Char, empty = false)
+      # For an ASCII char, decide directly instead of allocating a one-char
+      # `String` via `arg.to_s`. This mirrors the `String` overload exactly: a
+      # lone ASCII-whitespace char is blank (`return empty`), `'0'` is the only
+      # single-char member of `FALSY_TOKENS` (`false`), everything else is `true`.
+      # Non-ASCII chars fall back to the fully Unicode-correct string path.
+      if arg.ascii?
+        return empty if arg.ascii_whitespace?
+        return false if arg == '0'
+        return true
+      end
       to_b arg.to_s, empty
     end
 
