@@ -27,6 +27,14 @@ private class Loggy
   def describe_it(a, b)
     my a, b
   end
+
+  # Exercises macro hygiene: a caller-local variable literally named `__s`
+  # must not collide with (or be clobbered by) the builder the `my` macro uses.
+  def describe_with_local_s(a)
+    __s = "caller"
+    result = my a
+    {result, __s}
+  end
 end
 
 private class Person
@@ -95,6 +103,13 @@ describe Crystallabs::Helpers do
   describe Crystallabs::Helpers::Logging do
     it "renders the method name and inspected arguments" do
       Loggy.new.describe_it(1, "x").should eq %(describe_it: a=1 b="x")
+    end
+
+    it "does not collide with a caller-local variable named __s" do
+      result, s = Loggy.new.describe_with_local_s(1)
+      result.should eq %(describe_with_local_s: a=1)
+      # The caller's own `__s` is left untouched by the macro expansion.
+      s.should eq "caller"
     end
   end
 

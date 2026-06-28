@@ -7,13 +7,13 @@ module Crystallabs::Helpers
     end
 
     # Returns as a string the current method name and all arguments inspected.
-    macro my(*args, line = __LINE__)
-      String.build(128) {|__s|
-        __s << {{@def.name.stringify}}
-        __s << ':' #<< {{line}} << ':'
+    macro my(*args)
+      String.build(128) {|%s|
+        %s << {{@def.name.stringify}}
+        %s << ':'
         {% for a in args %}
-          __s << ' ' << {{a.stringify}} << '='
-          {{a}}.inspect __s
+          %s << ' ' << {{a.stringify}} << '='
+          {{a}}.inspect %s
         {% end %}
       }
     end
