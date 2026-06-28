@@ -46,6 +46,16 @@ private class Person
   alias_previous hello
 end
 
+private class Gadget
+  include Crystallabs::Helpers::Alias_Methods
+
+  property level : Int32 = 0
+
+  # Aliasing a setter exercises the macro's `name=` branch, which forwards the
+  # single assigned value rather than a splat.
+  alias_method :set_level=, :level=
+end
+
 describe Crystallabs::Helpers do
   describe Crystallabs::Helpers::Logging do
     it "renders the method name and inspected arguments" do
@@ -199,6 +209,12 @@ describe Crystallabs::Helpers do
 
     it "aliases the previously defined method" do
       Person.new("John").hello.should eq "hi John"
+    end
+
+    it "aliases a setter, forwarding the assigned value" do
+      g = Gadget.new
+      g.set_level = 7
+      g.level.should eq 7
     end
   end
 end

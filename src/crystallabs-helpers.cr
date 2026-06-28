@@ -159,9 +159,13 @@ module Crystallabs::Helpers
       {% if @type.methods.any? { |meth| meth.name.id == new_method.id } %}
         {% raise "Alias name '#{new_method.id}' already exists as a method!" %}
       {% end %}
+      # A setter (`name=`) forwards its single assigned value; any other method
+      # forwards all positional arguments. (A setter cannot take a splat.) The
+      # decision is computed once so the signature and the call can't drift apart.
+      {% setter = old_method.id.ends_with? "=" %}
       # :nodoc:
-      def {{new_method.id}}{% if old_method.id.ends_with? "=" %}(arg){% else %}(*args){% end %}
-        self.{{old_method.id}}{% if old_method.id.ends_with? "=" %}(arg){% else %}(*args){% end %}
+      def {{new_method.id}}({% if setter %}arg{% else %}*args{% end %})
+        self.{{old_method.id}}({% if setter %}arg{% else %}*args{% end %})
       end
     end
 
