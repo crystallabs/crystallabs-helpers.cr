@@ -56,6 +56,25 @@ private class Gadget
   alias_method :set_level=, :level=
 end
 
+private class Bag
+  include Crystallabs::Helpers::Alias_Methods
+
+  @items = Hash(String, Int32).new
+
+  def [](key)
+    @items[key]
+  end
+
+  def []=(key, value)
+    @items[key] = value
+  end
+
+  # The index setter `[]=` ends with `=` like a regular setter, but it takes two
+  # arguments (index + value), so the alias must forward all positional arguments
+  # rather than a single assigned value -- otherwise the forwarder fails to compile.
+  alias_method :store, :[]=
+end
+
 describe Crystallabs::Helpers do
   describe Crystallabs::Helpers::Logging do
     it "renders the method name and inspected arguments" do
@@ -221,6 +240,12 @@ describe Crystallabs::Helpers do
       g = Gadget.new
       g.set_level = 7
       g.level.should eq 7
+    end
+
+    it "aliases the multi-argument index setter, forwarding all positional arguments" do
+      bag = Bag.new
+      bag.store("a", 5)
+      bag["a"].should eq 5
     end
   end
 end
