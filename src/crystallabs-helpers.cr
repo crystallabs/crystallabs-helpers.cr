@@ -162,13 +162,18 @@ module Crystallabs::Helpers
       {% if @type.methods.any? { |meth| meth.name.id == new_method.id } %}
         {% raise "Alias name '#{new_method.id}' already exists as a method!" %}
       {% end %}
-      # A `name=` setter forwards its single assigned value; any other method
-      # forwards all positional arguments. (A `name=` setter cannot take a splat.)
-      # The index setter `[]=` ends with `=` too, but it is the one `=`-ending
-      # method that takes more than one argument (index + value), so it must use
-      # the splat path like any other multi-argument method. The decision is
-      # computed once so the signature and the call can't drift apart.
-      {% setter = old_method.id.ends_with?("=") && !(old_method.id == "[]=".id) %}
+      # A `name=` setter takes exactly one argument: Crystal forbids a splat on a
+      # setter method, and a setter call target only accepts the single assigned
+      # value. So the forwarder must use a single `arg` (not `*args`) whenever
+      # *either* the alias being defined or the method it forwards to is such a
+      # setter -- the splat-illegality is a property of the *defined* name, while
+      # the single-value-only call is a property of the *target*. Every other
+      # method -- including the index setter `[]=`, which ends with `=` but takes
+      # index + value -- forwards all positional arguments via a splat. The
+      # decision is computed once so the signature and the call can't drift apart.
+      {% new_is_setter = new_method.id.ends_with?("=") && !(new_method.id == "[]=".id) %}
+      {% old_is_setter = old_method.id.ends_with?("=") && !(old_method.id == "[]=".id) %}
+      {% setter = new_is_setter || old_is_setter %}
       # :nodoc:
       def {{new_method.id}}({% if setter %}arg{% else %}*args{% end %})
         self.{{old_method.id}}({% if setter %}arg{% else %}*args{% end %})

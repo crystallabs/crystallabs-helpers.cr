@@ -75,6 +75,22 @@ private class Bag
   alias_method :store, :[]=
 end
 
+private class Knob
+  include Crystallabs::Helpers::Alias_Methods
+
+  property level : Int32 = 0
+
+  def assign(v)
+    @level = v
+  end
+
+  # Aliasing a *setter* name (`position=`) onto a regular, non-setter method:
+  # the forwarder must be `def position=(arg)`, never `def position=(*args)` --
+  # Crystal forbids a splat on a setter method, so the single-arg decision must
+  # also consider the name being defined, not just the method being forwarded to.
+  alias_method :position=, :assign
+end
+
 describe Crystallabs::Helpers do
   describe Crystallabs::Helpers::Logging do
     it "renders the method name and inspected arguments" do
@@ -246,6 +262,12 @@ describe Crystallabs::Helpers do
       bag = Bag.new
       bag.store("a", 5)
       bag["a"].should eq 5
+    end
+
+    it "aliases a setter name onto a regular method, forwarding the single value" do
+      k = Knob.new
+      k.position = 9
+      k.level.should eq 9
     end
   end
 end
