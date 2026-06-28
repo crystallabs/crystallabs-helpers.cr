@@ -219,9 +219,14 @@ module Crystallabs::Helpers
       # method -- including the index setter `[]=`, which ends with `=` but takes
       # index + value -- forwards all positional arguments via a splat. The
       # decision is computed once so the signature and the call can't drift apart.
-      {% new_is_setter = new_method.id.ends_with?("=") && !(new_method.id == "[]=".id) %}
-      {% old_is_setter = old_method.id.ends_with?("=") && !(old_method.id == "[]=".id) %}
-      {% setter = new_is_setter || old_is_setter %}
+      # The same setter predicate applies to both the defined name and the target,
+      # so it is written exactly once and evaluated over both via a loop.
+      {% setter = false %}
+      {% for name in [new_method, old_method] %}
+        {% if name.id.ends_with?("=") && !(name.id == "[]=".id) %}
+          {% setter = true %}
+        {% end %}
+      {% end %}
       # :nodoc:
       def {{new_method.id}}({% if setter %}arg{% else %}*args{% end %})
         self.{{old_method.id}}({% if setter %}arg{% else %}*args{% end %})
