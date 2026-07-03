@@ -13,7 +13,7 @@ module Crystallabs::Helpers
         %s << ':'
         {% for a in args %}
           %s << ' ' << {{a.stringify}} << '='
-          {{a}}.inspect %s
+          ({{a}}).inspect %s
         {% end %}
       }
     end
@@ -42,7 +42,7 @@ module Crystallabs::Helpers
           hi -= 1
         end
         len = hi - lo
-        return true if len == 0
+        return empty if len == 0
         FALSY_TOKENS.each do |tok|
           next unless tok.bytesize == len
           token = tok.to_slice
