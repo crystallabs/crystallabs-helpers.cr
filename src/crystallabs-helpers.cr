@@ -22,7 +22,7 @@ module Crystallabs::Helpers
   module Boolean
     # The lowercase tokens that, ignoring surrounding whitespace and case, are
     # treated as `false`. Everything else non-blank is `true`.
-    FALSY_TOKENS = {"false", "0", "-0", "0n"}
+    FALSY_TOKENS = {"false", "0", "no", "off", "f", "n", "-0", "0n"}
 
     # :nodoc:
     def to_b(arg : String, empty = false)
@@ -72,12 +72,15 @@ module Crystallabs::Helpers
     # :nodoc:
     def to_b(arg : Char, empty = false)
       # For an ASCII char, decide directly instead of allocating via `arg.to_s`.
-      # Mirrors the `String` overload: ASCII-whitespace is blank (`empty`), `'0'`
-      # is the only single-char `FALSY_TOKENS` member, else `true`. Non-ASCII
-      # falls back to the string path.
+      # Mirrors the `String` overload: ASCII-whitespace is blank (`empty`); the
+      # single-char `FALSY_TOKENS` members are `'0'`, `'f'` and `'n'` (case-
+      # insensitive), else `true`. Non-ASCII falls back to the string path.
       if arg.ascii?
         return empty if arg.ascii_whitespace?
-        return false if arg == '0'
+        case arg
+        when '0', 'f', 'F', 'n', 'N'
+          return false
+        end
         return true
       end
       to_b arg.to_s, empty

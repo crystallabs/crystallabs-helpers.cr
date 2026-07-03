@@ -124,6 +124,10 @@ describe Crystallabs::Helpers do
       b.to_b("-0").should be_false
       b.to_b("0n").should be_false
       b.to_b("false").should be_false
+      b.to_b("no").should be_false
+      b.to_b("off").should be_false
+      b.to_b("f").should be_false
+      b.to_b("n").should be_false
       b.to_b(" ").should be_false
       b.to_b("").should be_false
     end
@@ -166,7 +170,12 @@ describe Crystallabs::Helpers do
 
     it "converts chars" do
       b.to_b('0').should be_false
+      b.to_b('f').should be_false
+      b.to_b('n').should be_false
+      b.to_b('F').should be_false
+      b.to_b('N').should be_false
       b.to_b('1').should be_true
+      b.to_b('y').should be_true
     end
 
     it "forwards the empty fallback for blank (whitespace) chars" do
