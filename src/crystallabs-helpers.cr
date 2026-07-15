@@ -180,8 +180,10 @@ module Crystallabs::Helpers
   module Alias_Methods
     # Defines new_method as an alias of old_method.
     #
-    # Creates a new method new_method that invokes old_method. Due to language
-    # limitations this only works when neither named arguments nor blocks are involved.
+    # One forwarder is defined per overload of *old_method*, reproducing that
+    # overload's parameter list verbatim — restrictions, defaults, keyword-only
+    # section and block argument included. So the alias is exactly as type-safe
+    # as what it aliases, and named arguments and blocks both work.
     #
     # ```
     # class Person
@@ -198,31 +200,66 @@ module Crystallabs::Helpers
     # person.full_name # => "John"
     # ```
     #
+    # Copying the restrictions is what makes an alias safe to introduce next to
+    # an *existing* method of the same name inherited from elsewhere. An
+    # unrestricted `def alias(*args)` forwarder would sit closer in the ancestor
+    # chain than that inherited method and silently swallow every call to it; a
+    # restricted one only claims the argument types it actually handles, leaving
+    # the rest to resolve as before.
+    #
     # This macro was present in Crystal until commit 7c3239ee505e07544ec372839efed527801d210a.
     macro alias_method(new_method, old_method)
       {% if @type.methods.any? { |meth| meth.name.id == new_method.id } %}
         {% raise "Alias name '#{new_method.id}' already exists as a method!" %}
       {% end %}
-      # A `name=` setter takes exactly one argument: Crystal forbids a splat on
-      # a setter method, and a setter call only accepts a single value. So the
-      # forwarder must use a single `arg` (not `*args`) whenever either the
-      # defined alias or its forwarding target is such a setter. The index
-      # setter `[]=` is exempt (ends with `=` but takes index + value, forwarded
-      # via splat). Computed once via a loop so the predicate for both names
-      # can't drift apart.
-      {% setter = false %}
-      {% for name in [new_method, old_method] %}
-        {% if name.id.ends_with?("=") && !(name.id == "[]=".id) %}
-          {% setter = true %}
-        {% end %}
+      {% overloads = @type.methods.select { |meth| meth.name.id == old_method.id } %}
+      {% if overloads.empty? %}
+        {% raise "Cannot alias '#{new_method.id}' to '#{old_method.id}': no such method (yet) on #{@type}. Note the target must already be defined at this point." %}
       {% end %}
-      # :nodoc:
-      def {{new_method.id}}({% if setter %}arg{% else %}*args{% end %})
-        self.{{old_method.id}}({% if setter %}arg{% else %}*args{% end %})
-      end
+      {% for m in overloads %}
+        {% params = [] of ::String %}
+        {% fwd = [] of ::String %}
+        {% for a, i in m.args %}
+          {% bare_splat = i == m.splat_index && a.name.stringify.empty? %}
+          {% decl = bare_splat ? "*" : "#{i == m.splat_index ? "*".id : "".id}#{a.name}" %}
+          {% decl = "#{decl.id} : #{a.restriction}" if !a.restriction.is_a?(Nop) %}
+          {% decl = "#{decl.id} = #{a.default_value}" if !a.default_value.is_a?(Nop) %}
+          {% params << decl %}
+          # A bare `*` only opens the keyword-only section — there is nothing to
+          # forward for it. Everything after it must be passed *by name*.
+          {% if !bare_splat %}
+            {% if i == m.splat_index %}
+              {% fwd << "*#{a.name}" %}
+            {% elsif m.splat_index && i > m.splat_index %}
+              {% fwd << "#{a.name}: #{a.name}" %}
+            {% else %}
+              {% fwd << "#{a.name}" %}
+            {% end %}
+          {% end %}
+        {% end %}
+        {% if m.double_splat %}
+          {% params << "**#{m.double_splat.name}" %}
+          {% fwd << "**#{m.double_splat.name}" %}
+        {% end %}
+        {% if m.block_arg %}
+          {% b = "&#{m.block_arg.name}" %}
+          {% b = "#{b.id} : #{m.block_arg.restriction}" if !m.block_arg.restriction.is_a?(Nop) %}
+          {% params << b %}
+          {% fwd << "&#{m.block_arg.name}" %}
+        {% end %}
+        # :nodoc:
+        def {{new_method.id}}({{params.join(", ").id}})
+          self.{{old_method.id}}({{fwd.join(", ").id}})
+        end
+      {% end %}
     end
 
-    # Defines new_method as an alias of last (most recently defined) method.
+    # Defines new_method as an alias of the immediately preceding method.
+    #
+    # NOTE: only use this when the preceding method has a **single** overload.
+    # `@type.methods` does not preserve source order once a name is overloaded,
+    # so "the last one" is not reliably the one written just above. Name the
+    # target explicitly with `alias_method` in that case.
     macro alias_previous(*new_methods)
       {% m = @type.methods.last %}
       {% for new_method in new_methods %}
