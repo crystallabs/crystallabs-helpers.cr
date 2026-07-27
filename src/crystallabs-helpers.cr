@@ -31,35 +31,31 @@ module Crystallabs::Helpers
       # place over the byte buffer instead of allocating the two intermediate
       # strings `arg.strip.downcase` would. Equivalent for all-ASCII input;
       # non-ASCII falls back to the fully Unicode-correct path below.
-      if arg.ascii_only?
-        bytes = arg.to_slice
-        lo = 0
-        hi = bytes.size
-        while lo < hi && bytes[lo].unsafe_chr.ascii_whitespace?
-          lo += 1
-        end
-        while hi > lo && bytes[hi - 1].unsafe_chr.ascii_whitespace?
-          hi -= 1
-        end
-        len = hi - lo
-        return empty if len == 0
-        FALSY_TOKENS.each do |tok|
-          next unless tok.bytesize == len
-          token = tok.to_slice
-          matched = true
-          len.times do |i|
-            byte = bytes[lo + i]
-            byte |= 0x20_u8 if 0x41_u8 <= byte <= 0x5A_u8 # ASCII upper -> lower
-            if byte != token[i]
-              matched = false
-              break
-            end
-          end
-          return false if matched
-        end
-        return true
+      return ascii_to_b(arg.to_slice, empty) if arg.ascii_only?
+      !FALSY_TOKENS.includes?(arg.strip.downcase)
+    end
+
+    private def ascii_to_b(bytes : Bytes, empty : Bool) : Bool
+      lo = 0
+      hi = bytes.size
+      while lo < hi && bytes[lo].unsafe_chr.ascii_whitespace?
+        lo += 1
       end
-      return false if FALSY_TOKENS.includes? arg.strip.downcase
+      while hi > lo && bytes[hi - 1].unsafe_chr.ascii_whitespace?
+        hi -= 1
+      end
+      return empty if lo == hi
+      FALSY_TOKENS.none? { |tok| ascii_falsy_match?(bytes, lo, hi - lo, tok) }
+    end
+
+    private def ascii_falsy_match?(bytes : Bytes, lo : Int32, len : Int32, tok : String) : Bool
+      return false unless tok.bytesize == len
+      token = tok.to_slice
+      len.times do |i|
+        byte = bytes[lo + i]
+        byte |= 0x20_u8 if 0x41_u8 <= byte <= 0x5A_u8 # ASCII upper -> lower
+        return false if byte != token[i]
+      end
       true
     end
 
@@ -265,6 +261,312 @@ module Crystallabs::Helpers
       {% for new_method in new_methods %}
         alias_method {{new_method.id.symbolize}}, {{m.name.id.symbolize}}
       {% end %}
+    end
+  end
+
+  # Filesystem helpers.
+  module Files
+    # Finds a file with name *target* inside toplevel directory *start*,
+    # depth-first, skipping the virtual/system trees. Returns the full path or
+    # `nil`. Unreadable directories and vanished entries are skipped, and a
+    # symlinked directory is not descended into (no cycle risk).
+    def self.find_file(start : String, target : String) : String?
+      return if %w[/dev /sys /proc /net].includes?(start)
+
+      files = begin
+        Dir.children start
+      rescue Exception
+        [] of String
+      end
+
+      files.each do |file|
+        full = File.join start, file
+
+        return full if file == target
+
+        stat = begin
+          File.info full, follow_symlinks: false
+        rescue Exception
+          nil
+        end
+
+        # `stat` is `File::Info?` — the `rescue` above yields `nil` for a
+        # dangling symlink, a races-away entry, or EACCES — so it must be
+        # guarded before `directory?`/`symlink?`.
+        if stat && stat.directory? && !stat.symlink?
+          found = find_file full, target
+          return found if found
+        end
+      end
+
+      nil
+    end
+  end
+
+  # Small formatting helpers.
+  module Format
+    # Formats a byte count with the largest binary unit that keeps it >= 1, so
+    # small values stay in plain bytes (`842B`) and large ones shrink to
+    # `KiB`/`MiB`/… with one decimal (`3.2KiB`).
+    def self.humanize_bytes(bytes : Int) : String
+      units = {"B", "KiB", "MiB", "GiB", "TiB", "PiB"}
+      value = bytes.to_f
+      unit = 0
+      while value >= 1024 && unit < units.size - 1
+        value /= 1024
+        unit += 1
+      end
+      unit == 0 ? "#{bytes}#{units[0]}" : "%.1f%s" % {value, units[unit]}
+    end
+
+    # Truncates *str* to *len* characters, replacing the last kept character
+    # with *marker* when cut (mutt/pine-style column truncation).
+    def self.truncate(str : String, len : Int32, marker : Char = '~') : String
+      return str if str.size <= len
+      "#{str[0, len - 1]}#{marker}"
+    end
+  end
+
+  # Byte-stream helpers.
+  module Streams
+    # Splits *carry* + *chunk* on the newline byte into complete lines,
+    # stripping a trailing `\r` (CRLF streams), and returns the extracted lines
+    # plus the leftover partial line to carry into the next call. Pure and
+    # side-effect free — the building block for tailing an fd/pipe.
+    def self.extract_lines(carry : Bytes, chunk : Bytes) : {Array(String), Bytes}
+      buf = Bytes.new(carry.size + chunk.size)
+      carry.copy_to(buf) unless carry.empty?
+      chunk.copy_to(buf[carry.size, chunk.size]) unless chunk.empty?
+
+      lines = [] of String
+      start = 0
+      buf.each_with_index do |byte, i|
+        next unless byte == 0x0A_u8 # '\n'
+        stop = i
+        stop -= 1 if stop > start && buf[stop - 1] == 0x0D_u8 # trailing '\r'
+        lines << String.new(buf[start, stop - start])
+        start = i + 1
+      end
+
+      rem = buf.size - start
+      new_carry = Bytes.new(rem)
+      buf[start, rem].copy_to(new_carry) if rem > 0
+      {lines, new_carry}
+    end
+  end
+
+  # A size-bounded memoization cache: a `Hash` that evicts entries once it
+  # grows past *capacity*.
+  #
+  # Drop-in for a plain `Hash` used as a memo (`[]`, `[]?`, `[]=`, `has_key?`,
+  # `delete`, `clear`, `fetch`), with two additions:
+  #
+  # * **Eviction.** When adding an entry would exceed *capacity*, the oldest
+  #   entry is dropped (FIFO by default; strict LRU with `lru: true`). A
+  #   *capacity* of `0` or less means unbounded.
+  # * **Memoizing `fetch`.** `fetch(key) { compute }` stores and returns the
+  #   computed value on a miss (and correctly caches a `nil` value, so it works
+  #   for negative caching). This differs from `Hash#fetch`, which does *not*
+  #   store.
+  #
+  # FIFO is the default because it keeps reads as pure `Hash` lookups, with no
+  # reordering. Pass `lru: true` when recency-of-use should decide what survives
+  # (e.g. an image decode cache) and the read cost is affordable.
+  #
+  # Not thread-safe.
+  class BoundedCache(K, V)
+    # Maximum entries kept; `<= 0` means unbounded.
+    property capacity : Int32
+
+    # Creates a cache holding at most *capacity* entries. *lru* switches
+    # eviction from FIFO to least-recently-used. *by_identity* keys the cache
+    # on object identity (`same?`) instead of value equality — for caches
+    # memoizing per-object results, mirroring `Hash#compare_by_identity`.
+    def initialize(@capacity : Int32, *, @lru : Bool = false, by_identity : Bool = false)
+      @store = {} of K => V
+      @store.compare_by_identity if by_identity
+    end
+
+    # Current number of entries.
+    def size : Int32
+      @store.size
+    end
+
+    # Whether *key* is present (distinguishes a cached `nil` value from absence).
+    def has_key?(key : K) : Bool
+      @store.has_key? key
+    end
+
+    # The value for *key*, or `nil` if absent. In `lru` mode a hit is promoted
+    # to most-recently-used.
+    def []?(key : K) : V?
+      # FIFO has no reorder-on-read, and an absent key and a cached `nil` both
+      # return `nil`, so one `[]?` is observably identical to `has_key?` +
+      # `touch` at half the lookups. LRU must promote on a hit — and so must
+      # tell a cached `nil` from absence — and keeps the two-step path.
+      if @lru
+        return unless @store.has_key? key
+        touch key
+      else
+        @store[key]?
+      end
+    end
+
+    # The value for *key*; raises `KeyError` if absent (like `Hash#[]`).
+    def [](key : K) : V
+      # As in `[]?`: FIFO needs no reorder-on-read, so a single `Hash#fetch`
+      # with a raising block does one lookup where `has_key?` + `touch` does
+      # two — and still tells a cached `nil` from absence. LRU must promote on
+      # a hit and keeps the two-step path.
+      if @lru
+        raise KeyError.new("Missing cache key: #{key.inspect}") unless @store.has_key? key
+        touch key
+      else
+        @store.fetch(key) { raise KeyError.new("Missing cache key: #{key.inspect}") }
+      end
+    end
+
+    # Stores *value* under *key* and returns it, evicting if over capacity.
+    def []=(key : K, value : V) : V
+      @store[key] = value
+      evict!
+      value
+    end
+
+    # Returns the cached value for *key*, or computes it via the block, stores
+    # it, and returns it. The block's result is cached even when `nil`.
+    def fetch(key : K, & : -> V) : V
+      # Same FIFO-vs-LRU split as `[]?`: `Hash#fetch(key, &)` resolves a hit in
+      # one lookup and, unlike `@store[key]?`, still distinguishes a cached
+      # `nil` value from an absent key — which is what makes negative caching
+      # work. LRU promotes on a hit and so keeps `has_key?` + `touch`.
+      if @lru
+        @store.has_key?(key) ? touch(key) : (self[key] = yield)
+      else
+        @store.fetch(key) { self[key] = yield }
+      end
+    end
+
+    # Removes *key*, returning its value or `nil`.
+    def delete(key : K) : V?
+      @store.delete key
+    end
+
+    # Empties the cache.
+    def clear : Nil
+      @store.clear
+    end
+
+    # Yields each `{key, value}` pair (insertion order).
+    def each(& : Tuple(K, V) -> _) : Nil
+      @store.each { |k, v| yield({k, v}) }
+    end
+
+    # Reads *key*'s value, promoting it in `lru` mode. Caller guarantees the
+    # key is present.
+    private def touch(key : K) : V
+      value = @store[key]
+      if @lru
+        @store.delete key
+        @store[key] = value
+      end
+      value
+    end
+
+    # Drops oldest entries until within capacity.
+    private def evict! : Nil
+      return unless @capacity > 0
+      while @store.size > @capacity
+        oldest = @store.first_key?
+        break if oldest.nil?
+        @store.delete oldest
+      end
+    end
+  end
+
+  # An emacs/readline-style kill ring: the shared text register that readline
+  # editing keys push deleted text into (`Ctrl-W` / `Ctrl-U` / `Ctrl-K` /
+  # `Alt-D`) and `Ctrl-Y` yanks back.
+  #
+  # As in emacs, consecutive kills accumulate into one entry (so `Ctrl-K Ctrl-K`
+  # yanks both lines, and a backward kill prepends) until a non-kill action calls
+  # `#interrupt`. Older entries are retained up to `#capacity` for a future
+  # yank-pop.
+  class KillRing
+    # Shared default ring (all inputs of a program, unless overridden).
+    class_property default : KillRing { KillRing.new }
+
+    # Kill entries, oldest first; the last is what `#yank` returns.
+    getter entries = [] of String
+
+    # Maximum number of entries kept (older ones are dropped).
+    property capacity : Int32
+
+    # Whether the previous editing action was a kill, so the next consecutive
+    # kill merges into the same entry rather than starting a new one.
+    @last_was_kill = false
+
+    def initialize(@capacity : Int32 = 60)
+    end
+
+    # Records *text* as a kill. A backward kill (*prepend* true — `Ctrl-W` /
+    # `Ctrl-U`) joins the front of the current entry; a forward kill (*prepend*
+    # false — `Ctrl-K` / `Alt-D`) joins the back. Consecutive kills merge; an
+    # intervening `#interrupt` starts a fresh entry. Empty text is ignored.
+    def kill(text : String, *, prepend : Bool = false) : Nil
+      return if text.empty?
+      if @last_was_kill && (last = @entries.last?)
+        @entries[-1] = prepend ? text + last : last + text
+      else
+        @entries << text
+        while @entries.size > @capacity
+          @entries.shift
+        end
+      end
+      @last_was_kill = true
+    end
+
+    # The most-recently killed text (what `Ctrl-Y` yanks), or `nil` when empty.
+    def yank : String?
+      @entries.last?
+    end
+
+    # Marks that a non-kill action happened, so the next kill starts a new entry.
+    def interrupt : Nil
+      @last_was_kill = false
+    end
+
+    # Drops all entries (and resets the accumulation flag).
+    def clear : Nil
+      @entries.clear
+      @last_was_kill = false
+    end
+  end
+
+  # An O(1) running average over the last *capacity* values pushed into it.
+  #
+  # Wraps a deque rather than subclassing `Deque(Int32)`: subclassing a stdlib
+  # generic is deprecated and promotes every `Deque(Int32)` in the program
+  # (including unrelated shards) to the virtual type `Deque(Int32)+`, causing
+  # confusing compile errors elsewhere.
+  class RunningAverage
+    def initialize(@capacity : Int32)
+      @deque = Deque(Int32).new @capacity
+      # Running sum, kept in sync on every push/shift so `avg` is O(1)
+      # instead of re-summing each call. `Int64` because pushed values can be
+      # as large as `Int32::MAX`, and `capacity` of them would overflow an
+      # `Int32` sum.
+      @sum = 0_i64
+    end
+
+    # Pushes *value* and returns the average over the retained window.
+    def avg(value : Int32) : Int64
+      if @deque.size == @capacity
+        @sum -= @deque.shift
+      end
+      @deque.push value
+      @sum += value
+      @sum // @deque.size
     end
   end
 end
