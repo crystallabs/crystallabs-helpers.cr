@@ -9,11 +9,11 @@ module Crystallabs::Helpers
     # Returns as a string the current method name and all arguments inspected.
     macro my(*args)
       String.build(128) {|%s|
-        %s << {{@def.name.stringify}}
+        %s << {{ @def.name.stringify }}
         %s << ':'
         {% for a in args %}
-          %s << ' ' << {{a.stringify}} << '='
-          ({{a}}).inspect %s
+          %s << ' ' << {{ a.stringify }} << '='
+          ({{ a }}).inspect %s
         {% end %}
       }
     end
@@ -164,10 +164,10 @@ module Crystallabs::Helpers
     # w.align = Tput::AlignFlag::Left
     # ```
     macro enum_property(decl)
-      property {{decl.var.id}} : {{decl.type}}{% if decl.value %} = {{decl.value}}{% end %}
+      property {{ decl.var.id }} : {{ decl.type }}{% if decl.value %} = {{ decl.value }}{% end %}
 
-      def {{decl.var.id}}=(value : ::Crystallabs::Helpers::Enums::Shorthands)
-        @{{decl.var.id}} = ::Crystallabs::Helpers::Enums.from(typeof(@{{decl.var.id}}), value)
+      def {{ decl.var.id }}=(value : ::Crystallabs::Helpers::Enums::Shorthands)
+        @{{ decl.var.id }} = ::Crystallabs::Helpers::Enums.from(typeof(@{{ decl.var.id }}), value)
       end
     end
   end
@@ -244,8 +244,8 @@ module Crystallabs::Helpers
           {% fwd << "&#{m.block_arg.name}" %}
         {% end %}
         # :nodoc:
-        def {{new_method.id}}({{params.join(", ").id}})
-          self.{{old_method.id}}({{fwd.join(", ").id}})
+        def {{ new_method.id }}({{ params.join(", ").id }})
+          self.{{ old_method.id }}({{ fwd.join(", ").id }})
         end
       {% end %}
     end
@@ -259,7 +259,7 @@ module Crystallabs::Helpers
     macro alias_previous(*new_methods)
       {% m = @type.methods.last %}
       {% for new_method in new_methods %}
-        alias_method {{new_method.id.symbolize}}, {{m.name.id.symbolize}}
+        alias_method {{ new_method.id.symbolize }}, {{ m.name.id.symbolize }}
       {% end %}
     end
   end
